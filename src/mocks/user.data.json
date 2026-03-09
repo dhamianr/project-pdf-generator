@@ -1,0 +1,20 @@
+[
+  {
+    "id": "123",
+    "name": "Juan Pérez",
+    "email": "juan@example.com",
+    "documento": "20-35123456-7"
+  },
+  {
+    "id": "456",
+    "name": "Marina Silva",
+    "email": "marina@example.com.br",
+    "documento": "123.456.789-00"
+  },
+  {
+    "id": "789",
+    "name": "Carlos Gardel",
+    "email": "carlos.g@example.com",
+    "documento": "27.345.678"
+  }
+]

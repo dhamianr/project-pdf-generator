@@ -1,0 +1,193 @@
+[
+  {
+    "id": "t1",
+    "userId": "123",
+    "date": "2026-03-01",
+    "amount": 500000.0,
+    "description": "0000003100012345678901",
+    "type": "DEPOSIT",
+    "currency": "ARS"
+  },
+  {
+    "id": "t2",
+    "userId": "123",
+    "date": "2026-03-02",
+    "amount": 15400.5,
+    "description": "Supermercados Coto",
+    "type": "PURCHASE",
+    "currency": "ARS"
+  },
+  {
+    "id": "t3",
+    "userId": "123",
+    "date": "2026-03-05",
+    "amount": 0.015,
+    "description": "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh",
+    "type": "WITHDRAWAL",
+    "currency": "BTC"
+  },
+  {
+    "id": "t4",
+    "userId": "123",
+    "date": "2026-03-08",
+    "amount": 4500.0,
+    "description": "Farmacity Suc. 45",
+    "type": "QR PAY",
+    "currency": "ARS"
+  },
+  {
+    "id": "t5",
+    "userId": "123",
+    "date": "2026-03-10",
+    "amount": 250.0,
+    "description": "0x71C7656EC7ab88b098defB751B7401B5f6d8976F",
+    "type": "DEPOSIT",
+    "currency": "USDC"
+  },
+  {
+    "id": "t6",
+    "userId": "123",
+    "date": "2026-03-15",
+    "amount": 12000.0,
+    "description": "0000003100098765432109",
+    "type": "WITHDRAWAL",
+    "currency": "ARS"
+  },
+  {
+    "id": "t7",
+    "userId": "123",
+    "date": "2026-03-20",
+    "amount": 1.5,
+    "description": "GzzWQk8Q8yuz4g8H2kZt9oP4x3f7oB8s9N1mC5vX6r",
+    "type": "DEPOSIT",
+    "currency": "SOL"
+  },
+  {
+    "id": "t7b",
+    "userId": "123",
+    "date": "2026-03-22",
+    "amount": 8500.0,
+    "description": "Estación de Servicio YPF",
+    "type": "PURCHASE",
+    "currency": "ARS"
+  },
+  {
+    "id": "t7c",
+    "userId": "123",
+    "date": "2026-03-25",
+    "amount": 0.005,
+    "description": "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh",
+    "type": "DEPOSIT",
+    "currency": "BTC"
+  },
+
+  {
+    "id": "t8",
+    "userId": "456",
+    "date": "2026-03-02",
+    "amount": 300.0,
+    "description": "marina.silva.pix@gmail.com",
+    "type": "PIX IN",
+    "currency": "USDT"
+  },
+  {
+    "id": "t9",
+    "userId": "456",
+    "date": "2026-03-06",
+    "amount": 50.5,
+    "description": "12345678900",
+    "type": "PIX OUT",
+    "currency": "USDT"
+  },
+  {
+    "id": "t10",
+    "userId": "456",
+    "date": "2026-03-12",
+    "amount": 100.0,
+    "description": "Banco do Brasil - Branch 45",
+    "type": "INTERNATIONAL WITHDRAWAL",
+    "currency": "USDC"
+  },
+  {
+    "id": "t11",
+    "userId": "456",
+    "date": "2026-03-18",
+    "amount": 200.0,
+    "description": "TransferWise Inc",
+    "type": "INTERNATIONAL_DEPOSIT",
+    "currency": "USDT"
+  },
+  {
+    "id": "t11b",
+    "userId": "456",
+    "date": "2026-03-21",
+    "amount": 15.0,
+    "description": "Netflix.com",
+    "type": "PURCHASE",
+    "currency": "USDC"
+  },
+  {
+    "id": "t11c",
+    "userId": "456",
+    "date": "2026-03-28",
+    "amount": 150.0,
+    "description": "joao.pix@hotmail.com",
+    "type": "PIX OUT",
+    "currency": "USDT"
+  },
+
+  {
+    "id": "t12",
+    "userId": "789",
+    "date": "2026-03-01",
+    "amount": 5000.0,
+    "description": "Wire Transfer Ref: 998877",
+    "type": "DEPOSIT USD",
+    "currency": "USDC"
+  },
+  {
+    "id": "t13",
+    "userId": "789",
+    "date": "2026-03-05",
+    "amount": 1.25,
+    "description": "0x32Be343B94f860124dC4fEe278FDCBD38C102D88",
+    "type": "WITHDRAWAL",
+    "currency": "ETH"
+  },
+  {
+    "id": "t14",
+    "userId": "789",
+    "date": "2026-03-10",
+    "amount": 1500.0,
+    "description": "Apple Store",
+    "type": "PURCHASE",
+    "currency": "USDC"
+  },
+  {
+    "id": "t15",
+    "userId": "789",
+    "date": "2026-03-25",
+    "amount": 0.5,
+    "description": "0x98Cd343B94f860124dC4fEe278FDCBD38C102E99",
+    "type": "DEPOSIT",
+    "currency": "ETH"
+  },
+  {
+    "id": "t15b",
+    "userId": "789",
+    "date": "2026-03-27",
+    "amount": 350.0,
+    "description": "Amazon AWS",
+    "type": "PURCHASE",
+    "currency": "USDC"
+  },
+  {
+    "id": "t15c",
+    "userId": "789",
+    "date": "2026-03-30",
+    "amount": 2.0,
+    "description": "0x11Ac343B94f860124dC4fEe278FDCBD38C102F00",
+    "type": "DEPOSIT",
+    "currency": "ETH"
+  }
+]
