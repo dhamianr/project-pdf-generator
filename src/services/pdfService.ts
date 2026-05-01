@@ -1,6 +1,6 @@
 import PDFDocument from "pdfkit";
 import type { FastifyReply } from "fastify";
-import type { User, Transaction } from "./dbService.js";
+import type { User, Transaction } from "../types/index.js";
 import { i18n, type Lang } from "../utils/translations.js";
 
 function formatDateLatam(dateString: string): string {
