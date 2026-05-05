@@ -12,12 +12,17 @@ if (!USE_MOCK && (!clientEmail || !privateKey || !projectId)) {
   );
 }
 
-export const bigquery = new BigQuery({
-  projectId: projectId!,
-  credentials: {
-    client_email: clientEmail!,
-    private_key: privateKey!.replace(/\\n/g, "\n"),
-  },
-});
+// Solo instanciamos el cliente de BigQuery si no estamos en modo mock.
+// En modo mock, este módulo igual se importa (por dbService.ts), pero nunca
+// se llama getStatementDataFromBigQuery, así que null es seguro aquí.
+export const bigquery = USE_MOCK
+  ? null
+  : new BigQuery({
+      projectId: projectId!,
+      credentials: {
+        client_email: clientEmail!,
+        private_key: privateKey!.replace(/\\n/g, "\n"),
+      },
+    });
 
 export const DATASET_ID = process.env.BIGQUERY_DATASET ?? "pdf_services";

@@ -1,23 +1,46 @@
-# 1. LA BASE: Agarramos una compu Linux chiquita que ya tiene Node.js versión 20 instalado.
-FROM node:20-slim
+# ─── STAGE 1: BUILD ─────────────────────────────────────────────────────────
+# Instalamos TODAS las dependencias (incluyendo devDependencies como typescript
+# y tsx) para poder compilar el TypeScript a JavaScript.
+FROM node:20-slim AS builder
 
-# 2. LA CARPETA: Le decimos "A partir de ahora, todo lo que hagamos va en la carpeta /app del contenedor"
 WORKDIR /app
 
-# 3. LAS DEPENDENCIAS: Copiamos tu package.json adentro del contenedor
+# Copiamos solo los manifests primero para aprovechar el cache de capas de Docker.
+# Si el código cambia pero las dependencias no, esta capa no se reconstruye.
 COPY package*.json ./
 
-# 4. LA INSTALACIÓN: Le decimos a la consolita del contenedor que instale las librerías (Express, PDFKit, etc)
-RUN npm install
+# npm ci: instalación determinista basada en package-lock.json (ideal para CI/CD)
+RUN npm ci
 
-# 5. EL CÓDIGO: Copiamos todo tu código (src, tsconfig.json, logo.png) al contenedor
+# Copiamos el resto del código fuente
 COPY . .
 
-# 6. LA TRADUCCIÓN: Ejecutamos el comando que armaste en el Paso 1 para pasar de TS a JS
+# Compilamos TypeScript → genera la carpeta /app/dist
 RUN npm run build
 
-# 7. EL PUERTO: Le avisamos a Docker que nuestra app se comunica por el puerto 3000
+
+# ─── STAGE 2: PRODUCTION ─────────────────────────────────────────────────────
+# Imagen final limpia: solo copiamos el JS compilado y las dependencias de
+# producción. El compilador de TypeScript, tsx, vitest, etc. NO entran acá.
+FROM node:20-slim AS production
+
+WORKDIR /app
+
+# Copiamos solo los manifests para instalar únicamente dependencias de producción
+COPY package*.json ./
+RUN npm ci --omit=dev
+
+# Copiamos el output compilado desde el stage anterior
+COPY --from=builder /app/dist ./dist
+
+# Si tu app usa el logo.png u otros assets en runtime, copialos también:
+# COPY --from=builder /app/logo.png ./logo.png
+
+# Seguridad: corremos la app con un usuario sin privilegios (no root)
+USER node
+
+# Le avisamos a Docker que la app escucha en el puerto 3000
 EXPOSE 3000
 
-# 8. EL ARRANQUE: El comando final que va a mantener vivo al contenedor
-CMD ["npm", "start"]
+# Comando de arranque: ejecuta el JS compilado directamente con Node
+CMD ["node", "dist/server.js"]
