@@ -1,13 +1,13 @@
-// vitest.config.ts
-//
-// Configuración de Vitest.
-// envFiles le dice a Vitest qué archivos de variables de entorno cargar
-// antes de correr los tests — en este caso .env.test en la raíz del proyecto.
-
 import { defineConfig } from "vitest/config";
+import { config } from "dotenv";
+
+config({ path: ".env.test" });
 
 export default defineConfig({
   test: {
-    envFiles: [".env.test"],
+    exclude: [
+      "**/node_modules/**",
+      "**/.claude/**",
+    ],
   },
 });

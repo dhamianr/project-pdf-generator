@@ -1,7 +1,7 @@
 # ─── STAGE 1: BUILD ─────────────────────────────────────────────────────────
 # Instalamos TODAS las dependencias (incluyendo devDependencies como typescript
 # y tsx) para poder compilar el TypeScript a JavaScript.
-FROM node:20-slim AS builder
+FROM node:24-slim AS builder
 
 WORKDIR /app
 
@@ -22,7 +22,7 @@ RUN npm run build
 # ─── STAGE 2: PRODUCTION ─────────────────────────────────────────────────────
 # Imagen final limpia: solo copiamos el JS compilado y las dependencias de
 # producción. El compilador de TypeScript, tsx, vitest, etc. NO entran acá.
-FROM node:20-slim AS production
+FROM node:24-slim AS production
 
 WORKDIR /app
 

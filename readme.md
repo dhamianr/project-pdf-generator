@@ -2,57 +2,55 @@
   <img src="./logo.png" alt="Logo Generador de Reportes PDF" width="200"/>
 </p>
 
-# 📄 Generador de Reportes PDF
+# Generador de Reportes PDF
 
 Un microservicio dockerizado construido con **Node.js**, **Fastify** y **TypeScript** para la generación dinámica de estados de cuenta en formato PDF.
 
-Incluye soporte multi-idioma (i18n), seguridad por API Key + IP Whitelisting, logging de requests en PostgreSQL, y fuente de datos intercambiable entre **Google BigQuery** (producción) y **Mock local** (desarrollo/testing).
+Incluye soporte multi-idioma (i18n), seguridad por API Key + IP Whitelisting, logging de requests en **AWS S3**, y fuente de datos intercambiable entre **Google BigQuery** (producción) y **Mock local** (desarrollo/testing).
 
 ---
 
-## 🛠️ Tecnologías Utilizadas
+## Tecnologías Utilizadas
 
 | Categoría | Tecnología |
 |---|---|
-| **Runtime** | Node.js 20+ |
+| **Runtime** | Node.js 24 |
 | **Framework** | Fastify 5 |
 | **Lenguaje** | TypeScript 5 |
 | **Generación de PDFs** | PDFKit |
 | **Base de datos (prod)** | Google BigQuery |
-| **Logging de requests** | PostgreSQL (`pg`) |
+| **Logging de requests** | AWS S3 (NDJSON) |
 | **Infraestructura** | Docker |
 | **Testing** | Vitest |
 | **Seguridad** | API Key header (`x-api-key`) + IP Whitelisting opcional |
 
 ---
 
-## 📁 Estructura del Proyecto
+## Estructura del Proyecto
 
 ```
 project-pdf-generator/
 ├── src/
-│   ├── app.ts                  # Configuración de Fastify (sin arrancar el servidor)
-│   ├── server.ts               # Entry point: arranca el servidor y hace listen()
+│   ├── app.ts                     # Configuración de Fastify (sin arrancar el servidor)
+│   ├── server.ts                  # Entry point: arranca el servidor y hace listen()
 │   ├── config/
-│   │   ├── database.ts         # Configuración del cliente BigQuery
-│   │   └── postgres.ts         # Pool de conexiones PostgreSQL (para logs)
+│   │   └── database.ts            # Configuración del cliente BigQuery
 │   ├── services/
-│   │   ├── dbService.ts        # Selector: BigQuery o Mock según USE_MOCK
+│   │   ├── dbService.ts           # Selector: BigQuery o Mock según USE_MOCK
 │   │   ├── dbService.bigquery.ts  # Implementación real con BigQuery
-│   │   ├── dbService.mock.ts   # Implementación mock para dev/tests
-│   │   ├── logService.ts       # Registro de cada request en PostgreSQL
-│   │   └── pdfService.ts       # Generación del PDF con PDFKit
+│   │   ├── dbService.mock.ts      # Implementación mock para dev/tests
+│   │   ├── logService.ts          # Logging de requests a AWS S3 (buffer + flush)
+│   │   └── pdfService.ts          # Generación del PDF con PDFKit
 │   ├── utils/
-│   │   ├── translations.ts     # Soporte multi-idioma (es, en, pt)
-│   │   └── random.ts           # Utilidades varias
-│   ├── types/                  # Tipos e interfaces TypeScript
-│   └── mocks/                  # Datos de ejemplo para el modo mock
-├── tests/                      # Tests unitarios e integración (Vitest)
-├── migrations/
-│   └── 001_create_api_logs.sql # Schema de la tabla de logs en PostgreSQL
+│   │   ├── translations.ts        # Soporte multi-idioma (es, en, pt)
+│   │   └── random.ts
+│   ├── types/                     # Tipos e interfaces TypeScript
+│   └── mocks/                     # Datos de ejemplo para el modo mock
+├── tests/                         # Tests unitarios e integración (Vitest)
 ├── docs/
-│   └── arquitectura_futura.md  # Diagrama y plan de arquitectura Pub/Sub
+│   └── arquitectura_futura.md     # Diagrama y plan de arquitectura Pub/Sub
 ├── Dockerfile
+├── .env.example                   # Variables de entorno requeridas (sin secretos)
 ├── .dockerignore
 ├── .gitignore
 ├── tsconfig.json
@@ -62,91 +60,62 @@ project-pdf-generator/
 
 ---
 
-## ⚙️ Configuración del Entorno (`.env`)
+## Configuración del Entorno (`.env`)
 
-Creá un archivo `.env` en la raíz del proyecto. Hay **dos modos de operación**:
+Copiá el archivo de ejemplo y completá con tus valores:
 
-### 🧪 Modo Mock (desarrollo y testing local — sin credenciales reales)
-
-```env
-# --- Seguridad ---
-API_KEY=tu_clave_super_secreta_aqui
-ENABLE_IP_WHITELIST=false
-ALLOWED_IPS=127.0.0.1,::1
-
-# --- Modo de datos ---
-USE_MOCK=true
-
-# --- PostgreSQL (logging de requests) ---
-LOG_DB_HOST=localhost
-LOG_DB_PORT=5432
-LOG_DB_USER=tu_usuario
-LOG_DB_PASSWORD=tu_password
-LOG_DB_NAME=pdf_logs
+```bash
+cp .env.example .env
 ```
 
-### 🏭 Modo Producción (con Google BigQuery)
+Hay **dos modos de operación**:
+
+### Modo Mock (desarrollo y testing local — sin credenciales reales)
 
 ```env
-# --- Seguridad ---
+API_KEY=tu_clave_super_secreta_aqui
+ENABLE_IP_WHITELIST=false
+USE_MOCK=true
+```
+
+### Modo Producción (con Google BigQuery y AWS S3)
+
+```env
+# Seguridad
 API_KEY=tu_clave_super_secreta_aqui
 ENABLE_IP_WHITELIST=false
 ALLOWED_IPS=127.0.0.1,::1
 
-# --- Modo de datos ---
+# Fuente de datos
 USE_MOCK=false
 
-# --- Google BigQuery ---
+# Google BigQuery
 BIGQUERY_PROJECT_ID=tu-proyecto-gcp
-BIGQUERY_DATASET=pdf_services
+BIGQUERY_DATASET=mi_dataset
 GCP_CLIENT_EMAIL=tu-cuenta@tu-proyecto.iam.gserviceaccount.com
 GCP_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
 
-# --- PostgreSQL (logging de requests) ---
-LOG_DB_HOST=localhost
-LOG_DB_PORT=5432
-LOG_DB_USER=tu_usuario
-LOG_DB_PASSWORD=tu_password
-LOG_DB_NAME=pdf_logs
+# AWS S3 — Logs
+AWS_REGION=us-east-1
+LOG_S3_BUCKET=mi-bucket-de-logs
+LOG_S3_PREFIX=api-logs
 ```
+
+> `AWS_ACCESS_KEY_ID` y `AWS_SECRET_ACCESS_KEY` se leen automáticamente del entorno. En AWS (EC2/ECS) podés usar un IAM Role y no necesitás configurarlas.
 
 ---
 
-## 🗄️ Configuración de la Base de Datos (PostgreSQL)
-
-El servicio registra cada request de la API en una tabla de PostgreSQL. Antes de arrancar el servidor por primera vez, seguí estos pasos en orden:
-
-**1. Crear la base de datos** (con el superusuario `postgres`):
-```bash
-psql -U postgres -c "CREATE DATABASE pdf_logs;"
-```
-
-**2. Otorgar permisos al usuario de tu `.env`** (necesario en PostgreSQL 15+, donde el esquema `public` ya no tiene permisos abiertos por defecto):
-```bash
-psql -U postgres -d pdf_logs -c "GRANT ALL ON SCHEMA public TO tu_usuario;"
-```
-
-**3. Ejecutar la migración:**
-```bash
-psql -U tu_usuario -d pdf_logs -f migrations/001_create_api_logs.sql
-```
-
-> Reemplazá `tu_usuario` y `pdf_logs` con los valores que definiste en tu `.env` para `PG_USER` y `PG_DATABASE` respectivamente.
-
-Esto crea la tabla `api_logs` que almacena: `user_id`, `start_date`, `end_date`, `lang`, `status_code`, `error_message`, `ip_address`, y `duration_ms`.
-
----
-
-## 🚀 Cómo ejecutarlo en Desarrollo (Local)
+## Cómo ejecutarlo en Desarrollo (Local)
 
 1. Instalá las dependencias:
    ```bash
    npm install
    ```
 
-2. Configurá el entorno (modo mock recomendado para desarrollo):
+2. Configurá el entorno:
    ```bash
-   # Copiá y editá el .env (ver sección anterior)
+   cp .env.example .env
+   # En desarrollo basta con API_KEY=cualquier_valor y USE_MOCK=true
    ```
 
 3. Iniciá el servidor con recarga automática:
@@ -154,11 +123,11 @@ Esto crea la tabla `api_logs` que almacena: `user_id`, `start_date`, `end_date`,
    npm run dev
    ```
 
-   _El servidor escuchará en `http://localhost:3000`_
+   El servidor escuchará en `http://localhost:3000`
 
 ---
 
-## 🧪 Testing
+## Testing
 
 El proyecto incluye tests unitarios e integración con **Vitest**. El modo mock permite correr los tests sin ninguna credencial externa.
 
@@ -166,35 +135,36 @@ El proyecto incluye tests unitarios e integración con **Vitest**. El modo mock 
 # Correr todos los tests una sola vez
 npm test
 
-# Correr los tests en modo watch (re-ejecuta al guardar)
+# Correr los tests en modo watch
 npm run test:watch
 ```
 
 Tests incluidos:
-- `dbService.test.ts` — Lógica de acceso a datos
-- `logService.test.ts` — Registro de requests
-- `reporte.route.test.ts` — Endpoint `/api/reporte` (autenticación, validaciones, respuesta PDF)
-- `translations.test.ts` — Sistema multi-idioma
+
+| Archivo | Qué verifica |
+|---|---|
+| `dbService.test.ts` | Lógica de acceso a datos |
+| `logService.test.ts` | Buffer y flush a S3 |
+| `reporte.route.test.ts` | Endpoint `/api/reporte` (auth, validaciones, respuesta PDF) |
+| `translations.test.ts` | Sistema multi-idioma |
 
 ---
 
-## 🐳 Cómo desplegarlo en Producción (Docker)
+## Cómo desplegarlo en Producción (Docker)
 
-Este proyecto está optimizado para correr en contenedores aislados.
-
-1. Construí la imagen de Docker:
+1. Construí la imagen:
    ```bash
    docker build -t api-generador-pdf .
    ```
 
-2. Levantá el contenedor en segundo plano (Detached mode):
+2. Levantá el contenedor:
    ```bash
    docker run -d -p 3000:3000 --env-file .env api-generador-pdf
    ```
 
 ---
 
-## 📡 Uso de la API
+## Uso de la API
 
 ### `GET /api/reporte`
 
@@ -215,7 +185,7 @@ Genera y descarga un estado de cuenta en formato PDF.
 | `end` | `YYYY-MM-DD` | ✅ | Fecha de fin del reporte |
 | `lang` | `es` \| `en` \| `pt` | ❌ | Idioma del PDF (default: `es`) |
 
-**Ejemplo de request:**
+**Ejemplo:**
 
 ```bash
 curl -H "x-api-key: tu_clave_secreta" \
@@ -236,30 +206,40 @@ curl -H "x-api-key: tu_clave_secreta" \
 
 ---
 
-## 📈 Evolución y Escalado Futuro
+## Logging
 
-Si bien este proyecto funciona como un microservicio síncrono independiente, su arquitectura puede escalar de forma masiva mediante un modelo orientado a eventos (Pub/Sub).
+Cada request a `/api/reporte` queda registrado en AWS S3 en formato **NDJSON** (una línea JSON por entrada), con particionado compatible con AWS Athena:
 
-👉 [Ver Arquitectura Futura](./docs/arquitectura_futura.md)
+```
+s3://mi-bucket/api-logs/year=2026/month=05/day=08/hour=14/api_logs_20260508_140000.ndjson
+```
+
+Los logs se acumulan en memoria y se envían a S3 cada 5 minutos o cada 500 requests (lo que ocurra primero). Al apagar el servidor con `SIGTERM` se hace un flush final para no perder logs.
 
 ---
 
-## 🛡️ Consideraciones para Producción y Seguridad
+## Evolución y Escalado Futuro
 
-### 1. Generación de API Keys Seguras
+Si bien este proyecto funciona como un microservicio síncrono independiente, su arquitectura puede escalar mediante un modelo orientado a eventos (Pub/Sub).
 
-Para entornos productivos, la `API_KEY` debe ser un hash criptográfico fuerte (mínimo 32 caracteres). Podés generarla así:
+[Ver Arquitectura Futura](./docs/arquitectura_futura.md)
 
-- **Opción A (Node.js nativo):**
-  ```bash
-  node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-  ```
-- **Opción B (Gestores de Contraseñas):** Bitwarden, 1Password, o KeePass para generar y almacenar cadenas largas de forma segura.
+---
 
-### 2. Escalabilidad: Rate Limiting y Timeouts
+## Consideraciones de Seguridad
 
-A medida que el sistema crezca, será necesario implementar:
+### Generación de API Keys
 
-- **Rate Limiting:** Limitar peticiones por IP/usuario usando `@fastify/rate-limit` + Redis para prevenir abusos o ataques DDoS.
-- **Request Timeout:** Cortar conexiones inactivas del cliente para no mantener puertos ocupados.
-- **Worker Timeout:** Establecer un tiempo de vida máximo para la generación del PDF. Si un reporte entra en un bucle o es demasiado pesado, el proceso debe terminarse (ej. a los 3 minutos) para evitar procesos "zombie" que consuman toda la RAM del servidor.
+Para producción, la `API_KEY` debe ser un hash criptográfico fuerte (mínimo 32 caracteres):
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+### Escalabilidad
+
+A medida que el sistema crezca, considerar:
+
+- **Rate Limiting** — `@fastify/rate-limit` + Redis para prevenir abusos
+- **Request Timeout** — cortar conexiones inactivas del cliente
+- **Worker Timeout** — tiempo máximo de vida para la generación del PDF (evitar procesos zombie)
