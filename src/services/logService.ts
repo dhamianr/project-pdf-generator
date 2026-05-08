@@ -1,4 +1,9 @@
-import { logPool } from "../config/postgres.js";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import "dotenv/config";
+
+const s3 = new S3Client({ region: process.env.AWS_REGION ?? "us-east-1" });
+const FLUSH_INTERVAL_MS = 5 * 60 * 1000;
+const FLUSH_BATCH_SIZE = 500;
 
 export interface ApiLogEntry {
   userId: string | undefined;
@@ -11,24 +16,58 @@ export interface ApiLogEntry {
   durationMs: number;
 }
 
-export async function logApiRequest(entry: ApiLogEntry): Promise<void> {
-  const sql = `
-    INSERT INTO api_logs
-      (user_id, start_date, end_date, lang, status_code, error_message, ip_address, duration_ms)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-  `;
-  try {
-    await logPool.query(sql, [
-      entry.userId ?? null,
-      entry.startDate ?? null,
-      entry.endDate ?? null,
-      entry.lang ?? null,
-      entry.statusCode,
-      entry.errorMessage,
-      entry.ipAddress,
-      entry.durationMs,
-    ]);
-  } catch (err) {
-    console.warn("Failed to write API log to database:", err);
+interface StoredLogEntry extends ApiLogEntry {
+  created_at: string;
+}
+
+let buffer: StoredLogEntry[] = [];
+
+export function logApiRequest(entry: ApiLogEntry): void {
+  buffer.push({ ...entry, created_at: new Date().toISOString() });
+  if (buffer.length >= FLUSH_BATCH_SIZE) {
+    void flushBuffer();
   }
 }
+
+export async function flushBuffer(): Promise<void> {
+  const bucket = process.env.LOG_S3_BUCKET ?? "";
+  const prefix = process.env.LOG_S3_PREFIX ?? "api-logs";
+  if (buffer.length === 0 || !bucket) return;
+  const toFlush = buffer.splice(0);
+  const now = new Date();
+  const key = buildKey(now, prefix);
+  const body = toFlush.map((e) => JSON.stringify(e)).join("\n");
+  try {
+    await s3.send(
+      new PutObjectCommand({
+        Bucket: bucket,
+        Key: key,
+        Body: body,
+        ContentType: "application/x-ndjson",
+      })
+    );
+  } catch (err) {
+    console.warn("Failed to write logs to S3:", err);
+  }
+}
+
+function buildKey(d: Date, prefix: string): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const ts = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+  return `${prefix}/year=${d.getFullYear()}/month=${pad(d.getMonth() + 1)}/day=${pad(d.getDate())}/hour=${pad(d.getHours())}/api_logs_${ts}.ndjson`;
+}
+
+const flushTimer = setInterval(() => {
+  void flushBuffer();
+}, FLUSH_INTERVAL_MS);
+
+// Evitar que el timer mantenga el proceso vivo innecesariamente
+flushTimer.unref();
+
+async function shutdown() {
+  clearInterval(flushTimer);
+  await flushBuffer();
+}
+
+process.on("SIGTERM", () => shutdown().then(() => process.exit(0)));
+process.on("SIGINT", () => shutdown().then(() => process.exit(0)));

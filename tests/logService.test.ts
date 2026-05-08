@@ -1,120 +1,117 @@
 // tests/logService.test.ts
 //
-// ¿Qué es un mock?
-// Es un "doble de actuación" — reemplazamos la función real (pool.query)
-// por una función falsa que controlamos nosotros. Así evitamos conectarnos
-// a la DB real en los tests.
+// Testeamos logService con S3.
+// En vez de conectarnos a AWS real, mockeamos @aws-sdk/client-s3
+// para verificar que se llama con los parámetros correctos.
 //
 // Queremos verificar:
-//   ✅ ¿logApiRequest llama al pool.query con el SQL correcto?
-//   ✅ ¿Le pasa los parámetros en el orden correcto?
-//   ✅ ¿No lanza error si la DB falla? (falla silenciosa)
+//   ✅ ¿logApiRequest acumula en el buffer?
+//   ✅ ¿flushBuffer llama a S3 con NDJSON válido?
+//   ✅ ¿flushBuffer no hace nada si el buffer está vacío?
+//   ✅ ¿No lanza error si S3 falla?
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-// vi.mock() intercepta el import de postgres.ts y reemplaza logPool
-// por un objeto falso que nosotros controlamos.
-// Esto se ejecuta ANTES de que se importe logService.ts
-vi.mock("../src/config/postgres.js", () => ({
-  logPool: {
-    // query es la función que reemplazamos con vi.fn()
-    // vi.fn() es una función vacía que registra cuántas veces fue llamada
-    // y con qué argumentos — sin hacer nada real
-    query: vi.fn(),
-  },
+// vi.mock() se hoistea al inicio del archivo antes de que se ejecute cualquier
+// código, por eso mockSend debe declararse con vi.hoisted() para que esté
+// disponible dentro del factory de vi.mock().
+const { mockSend } = vi.hoisted(() => ({ mockSend: vi.fn() }));
+
+vi.mock("@aws-sdk/client-s3", () => ({
+  S3Client: vi.fn().mockImplementation(() => ({ send: mockSend })),
+  PutObjectCommand: vi.fn().mockImplementation((params) => params),
 }));
 
-// Importamos DESPUÉS del mock para que ya use la versión falsa
-import { logApiRequest } from "../src/services/logService.js";
-import { logPool } from "../src/config/postgres.js";
+// Importamos DESPUÉS del mock
+import { logApiRequest, flushBuffer } from "../src/services/logService.js";
 
-// Antes de cada test, reseteamos el mock para que no queden llamadas anteriores
+const sampleEntry = {
+  userId: "u123",
+  startDate: "2026-01-01",
+  endDate: "2026-01-31",
+  lang: "es",
+  statusCode: 200,
+  errorMessage: null,
+  ipAddress: "127.0.0.1",
+  durationMs: 150,
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
+  // Asegurar que el bucket esté configurado para los tests
+  process.env.LOG_S3_BUCKET = "test-bucket";
 });
 
-// 📌 GRUPO 1: Verifica que se llama a la DB correctamente
-describe("logApiRequest - llamadas a la base de datos", () => {
+afterEach(async () => {
+  // Vaciar el buffer entre tests
+  await flushBuffer();
+});
 
-  it("llama a pool.query una vez por request", async () => {
-    await logApiRequest({
-      userId: "123",
-      startDate: "2026-03-01",
-      endDate: "2026-03-31",
-      lang: "es",
-      statusCode: 200,
-      errorMessage: null,
-      ipAddress: "127.0.0.1",
-      durationMs: 150,
-    });
+describe("logApiRequest - acumula en buffer", () => {
+  it("no llama a S3 inmediatamente al recibir un log", () => {
+    logApiRequest(sampleEntry);
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+});
 
-    // ¿Se llamó exactamente una vez?
-    expect(logPool.query).toHaveBeenCalledTimes(1);
+describe("flushBuffer - escribe a S3", () => {
+  it("no llama a S3 si el buffer está vacío", async () => {
+    await flushBuffer();
+    expect(mockSend).not.toHaveBeenCalled();
   });
 
-  it("pasa los parámetros en el orden correcto", async () => {
-    await logApiRequest({
-      userId: "456",
-      startDate: "2026-01-01",
-      endDate: "2026-01-31",
-      lang: "en",
-      statusCode: 404,
-      errorMessage: "Usuario no encontrado",
-      ipAddress: "192.168.1.1",
-      durationMs: 42,
-    });
+  it("llama a S3 con body NDJSON válido", async () => {
+    logApiRequest(sampleEntry);
+    logApiRequest({ ...sampleEntry, userId: "u456", statusCode: 404 });
 
-    // toHaveBeenCalledWith verifica con qué argumentos se llamó la función
-    // El primer argumento es el SQL (no nos importa el texto exacto, solo los params)
-    // El segundo es el array de valores → ese sí lo verificamos en orden
-    expect(logPool.query).toHaveBeenCalledWith(
-      expect.any(String), // el SQL puede ser cualquier string
-      ["456", "2026-01-01", "2026-01-31", "en", 404, "Usuario no encontrado", "192.168.1.1", 42]
+    await flushBuffer();
+
+    expect(mockSend).toHaveBeenCalledTimes(1);
+
+    const command = vi.mocked(mockSend).mock.calls[0][0] as {
+      Body: string;
+      Bucket: string;
+      ContentType: string;
+      Key: string;
+    };
+
+    expect(command.Bucket).toBe("test-bucket");
+    expect(command.ContentType).toBe("application/x-ndjson");
+
+    // Cada línea debe ser un JSON válido
+    const lines = command.Body.trim().split("\n");
+    expect(lines).toHaveLength(2);
+    lines.forEach((line) => expect(() => JSON.parse(line)).not.toThrow());
+
+    // Cada entrada debe tener created_at
+    const parsed = lines.map((l) => JSON.parse(l));
+    parsed.forEach((entry) => expect(entry.created_at).toBeTruthy());
+  });
+
+  it("la Key sigue el formato Hive-style particionado", async () => {
+    logApiRequest(sampleEntry);
+    await flushBuffer();
+
+    const command = vi.mocked(mockSend).mock.calls[0][0] as { Key: string };
+    expect(command.Key).toMatch(
+      /^api-logs\/year=\d{4}\/month=\d{2}\/day=\d{2}\/hour=\d{2}\/api_logs_\d{8}_\d{6}\.ndjson$/
     );
   });
 
-  it("convierte userId undefined a null", async () => {
-    await logApiRequest({
-      userId: undefined,   // ← viene como undefined
-      startDate: "2026-03-01",
-      endDate: "2026-03-31",
-      lang: "es",
-      statusCode: 400,
-      errorMessage: null,
-      ipAddress: null,
-      durationMs: 5,
-    });
+  it("vacía el buffer después del flush", async () => {
+    logApiRequest(sampleEntry);
+    await flushBuffer();
+    vi.clearAllMocks();
 
-    const llamada = vi.mocked(logPool.query).mock.calls[0];
-    const params = llamada[1] as unknown[];
-
-    // El primer param ($1) debe ser null, no undefined
-    // PostgreSQL no entiende undefined — solo null
-    expect(params[0]).toBeNull();
+    // Segundo flush → buffer vacío → no llama a S3
+    await flushBuffer();
+    expect(mockSend).not.toHaveBeenCalled();
   });
 
-});
+  it("no lanza error si S3 falla", async () => {
+    mockSend.mockRejectedValueOnce(new Error("S3 no disponible"));
+    logApiRequest(sampleEntry);
 
-// 📌 GRUPO 2: Falla silenciosa si la DB no responde
-describe("logApiRequest - falla silenciosa", () => {
-
-  it("no lanza error si pool.query falla", async () => {
-    // Hacemos que el mock simule un error de DB
-    vi.mocked(logPool.query).mockRejectedValueOnce(new Error("DB caída"));
-
-    // La función NO debe lanzar el error hacia arriba
-    await expect(
-      logApiRequest({
-        userId: "123",
-        startDate: "2026-03-01",
-        endDate: "2026-03-31",
-        lang: "es",
-        statusCode: 200,
-        errorMessage: null,
-        ipAddress: null,
-        durationMs: 100,
-      })
-    ).resolves.not.toThrow(); // resuelve sin tirar error ✅
+    await expect(flushBuffer()).resolves.not.toThrow();
   });
-
 });
