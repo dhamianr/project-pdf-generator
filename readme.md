@@ -60,7 +60,24 @@ project-pdf-generator/
 
 ---
 
-## Configuración del Entorno (`.env`)
+## Configuración del Entorno
+
+Este proyecto usa **Doppler** como gestor de secrets en producción/desarrollo real, y un `.env.test` local para los tests.
+
+### Opción A — Doppler (recomendado para dev y producción)
+
+1. Instalá el CLI según tu SO: [docs.doppler.com/docs/install-cli](https://docs.doppler.com/docs/install-cli)
+2. Autenticarte: `doppler login`
+3. Vincular el proyecto (ya configurado en `.doppler.yaml`):
+   ```bash
+   doppler setup
+   ```
+4. Correr el servidor con secrets inyectados:
+   ```bash
+   npm run dev:doppler
+   ```
+
+### Opción B — `.env` manual (fallback)
 
 Copiá el archivo de ejemplo y completá con tus valores:
 
@@ -70,7 +87,7 @@ cp .env.example .env
 
 Hay **dos modos de operación**:
 
-### Modo Mock (desarrollo y testing local — sin credenciales reales)
+#### Modo Mock (desarrollo local — sin credenciales reales)
 
 ```env
 API_KEY=tu_clave_super_secreta_aqui
@@ -78,7 +95,7 @@ ENABLE_IP_WHITELIST=false
 USE_MOCK=true
 ```
 
-### Modo Producción (con Google BigQuery y AWS S3)
+#### Modo Producción (con Google BigQuery y AWS S3)
 
 ```env
 # Seguridad
@@ -97,11 +114,13 @@ GCP_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
 
 # AWS S3 — Logs
 AWS_REGION=us-east-1
+AWS_ACCESS_KEY_ID=tu_access_key
+AWS_SECRET_ACCESS_KEY=tu_secret_key
 LOG_S3_BUCKET=mi-bucket-de-logs
 LOG_S3_PREFIX=api-logs
 ```
 
-> `AWS_ACCESS_KEY_ID` y `AWS_SECRET_ACCESS_KEY` se leen automáticamente del entorno. En AWS (EC2/ECS) podés usar un IAM Role y no necesitás configurarlas.
+> En AWS (EC2/ECS) podés usar un IAM Role y omitir `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`.
 
 ---
 
@@ -112,14 +131,14 @@ LOG_S3_PREFIX=api-logs
    npm install
    ```
 
-2. Configurá el entorno:
+2. Configurá el entorno (elegí una opción):
    ```bash
-   cp .env.example .env
-   # En desarrollo basta con API_KEY=cualquier_valor y USE_MOCK=true
-   ```
+   # Con Doppler (recomendado)
+   doppler login && doppler setup
+   npm run dev:doppler
 
-3. Iniciá el servidor con recarga automática:
-   ```bash
+   # Sin Doppler
+   cp .env.example .env   # completá con tus valores
    npm run dev
    ```
 
@@ -129,7 +148,26 @@ LOG_S3_PREFIX=api-logs
 
 ## Testing
 
-El proyecto incluye tests unitarios e integración con **Vitest**. El modo mock permite correr los tests sin ninguna credencial externa.
+El proyecto usa **Vitest** con modo mock — los tests corren sin ninguna credencial externa (sin BigQuery, sin S3 real).
+
+### Requisito: crear `.env.test` localmente
+
+El archivo `.env.test` está en `.gitignore` (no se sube al repo). Tenés que crearlo manualmente en la raíz del proyecto:
+
+```env
+# .env.test — solo para tests locales, no contiene secrets reales
+USE_MOCK=true
+API_KEY=test-api-key-local
+ENABLE_IP_WHITELIST=false
+ALLOWED_IPS=127.0.0.1,::1
+AWS_REGION=us-east-1
+LOG_S3_BUCKET=test-bucket
+LOG_S3_PREFIX=api-logs
+```
+
+> Los valores de AWS son placeholders — con `USE_MOCK=true` el código nunca intenta conectarse a S3 durante los tests.
+
+### Comandos
 
 ```bash
 # Correr todos los tests una sola vez
@@ -157,7 +195,21 @@ Tests incluidos:
    docker build -t api-generador-pdf .
    ```
 
-2. Levantá el contenedor:
+2. Levantá el contenedor inyectando los secrets:
+
+   **Con Doppler (recomendado):**
+   ```bash
+   # Doppler inyecta las variables antes de ejecutar el contenedor
+   doppler run -- docker run -d -p 3000:3000 \
+     -e API_KEY \
+     -e AWS_ACCESS_KEY_ID \
+     -e AWS_SECRET_ACCESS_KEY \
+     -e LOG_S3_BUCKET \
+     -e USE_MOCK \
+     api-generador-pdf
+   ```
+
+   **Sin Doppler (fallback con `.env`):**
    ```bash
    docker run -d -p 3000:3000 --env-file .env api-generador-pdf
    ```
@@ -230,9 +282,13 @@ Si bien este proyecto funciona como un microservicio síncrono independiente, su
 
 ### Generación de API Keys
 
-Para producción, la `API_KEY` debe ser un hash criptográfico fuerte (mínimo 32 caracteres):
+Para producción, la `API_KEY` debe ser un hash criptográfico fuerte. El proyecto incluye la utilidad `src/utils/random.ts` que genera un SHA-256 de 256 bytes aleatorios (64 caracteres hex):
 
 ```bash
+# Usando la utilidad del proyecto (requiere haber compilado con npm run build)
+node -e "import('./dist/utils/random.js').then(m => console.log(m.generateRandomSecret()))"
+
+# Alternativa rápida con Node.js nativo (sin compilar)
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 

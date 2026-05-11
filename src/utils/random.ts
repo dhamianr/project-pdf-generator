@@ -7,5 +7,3 @@ export const generateRandomSecret = () => {
     .update(buffer as any)
     .digest("hex");
 };
-
-console.log(generateRandomSecret());
